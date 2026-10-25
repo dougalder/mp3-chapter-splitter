@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MP3 Chapter Splitter</title>
+  <style>
+    :root {
+      --bg: #fafafa;
+      --fg: #333;
+      --border: #ddd;
+      --card: #fff;
+      --accent: #0066cc;
+      --field: #f5f5f5;
+      --placeholder: #999;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #1a1a1a;
+        --fg: #e0e0e0;
+        --border: #333;
+        --card: #2a2a2a;
+        --accent: #66b3ff;
+        --field: #333;
+        --placeholder: #888;
+      }
+    }
+    :root[data-theme="dark"] {
+      --bg: #1a1a1a;
+      --fg: #e0e0e0;
+      --border: #333;
+      --card: #2a2a2a;
+      --accent: #66b3ff;
+      --field: #333;
+      --placeholder: #888;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 0;
+      font: 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      transition: background 0.3s, color 0.3s;
+    }
+    header {
+      padding: 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    h1 { margin: 0; font-size: 24px; }
+    button {
+      padding: 8px 16px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--fg);
+      cursor: pointer;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    button:hover {
+      background: var(--field);
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    input[type="file"],
+    input[type="text"],
+    textarea,
+    select {
+      padding: 8px;
+      border: 1px solid var(--border);
+      background: var(--field);
+      color: var(--fg);
+      border-radius: 4px;
+      font-size: 14px;
+      font-family: inherit;
+      width: 100%;
+      margin: 4px 0;
+    }
+    input[type="text"]::placeholder,
+    textarea::placeholder {
+      color: var(--placeholder);
+    }
+    label {
+      display: block;
+      margin-top: 8px;
+      font-weight: 500;
+    }
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+    .tab {
+      padding: 8px 16px;
+      cursor: pointer;
+      border: none;
+      background: transparent;
+      color: var(--placeholder);
+      border-bottom: 2px solid transparent;
+    }
+    .tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+    }
+    canvas {
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      display: block;
+      width: 100%;
+      height: auto;
+      background: var(--field);
+      cursor: crosshair;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    tr {
+      border-bottom: 1px solid var(--border);
+    }
+    th, td {
+      padding: 8px;
+      text-align: left;
+    }
+    th {
+      background: var(--field);
+      font-weight: 600;
+    }
+    .progress-bar {
+      width: 100%;
+      height: 4px;
+      background: var(--field);
+      border-radius: 2px;
+      overflow: hidden;
+      margin: 8px 0;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--accent);
+      width: 0%;
+      transition: width 0.1s;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>MP3 Chapter Splitter</h1>
+    <button id="themeBtn">🌙 Dark</button>
+  </header>
+
+  <div class="container">
+    <!-- File upload -->
+    <div class="card">
+      <label>Load MP3 File</label>
+      <input type="file" id="fileInput" accept=".mp3" />
+      <div class="progress-bar">
+        <div class="progress-bar-fill" id="readProgress"></div>
+      </div>
+      <div id="fileInfo"></div>
+    </div>
+
+    <!-- Waveform -->
+    <div class="card">
+      <label>Waveform & Timeline</label>
+      <canvas id="waveform" width="800" height="120"></canvas>
+      <div style="margin-top: 8px; font-size: 12px;">
+        <span id="timeDisplay">0:00 / 0:00</span>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="card">
+      <button id="playBtn">▶ Play</button>
+      <button id="pauseBtn">⏸ Pause</button>
+      <button id="startBtn">⏮ Start</button>
+      <button id="endBtn">⏭ End</button>
+      <button id="prevBreakBtn">← Prev Break</button>
+      <button id="nextBreakBtn">Next Break →</button>
+      <audio id="player" style="display: none;"></audio>
+    </div>
+
+    <!-- Settings tabs -->
+    <div class="card">
+      <div class="tabs">
+        <button class="tab active" data-tab="find">Auto-Detect</button>
+        <button class="tab" data-tab="paste">Paste Timestamps</button>
+        <button class="tab" data-tab="tags">Tags</button>
+      </div>
+
+      <div id="tab-find" class="tab-content active">
+        <label>Detection Options</label>
+        <label>Quiet threshold (dB): <input type="range" id="quietSlider" min="-60" max="-20" value="-38" step="1" style="width: auto;"/></label>
+        <label>Min gap (sec): <input type="range" id="gapSlider" min="0.5" max="5" value="1.2" step="0.1" style="width: auto;"/></label>
+        <label>
+          <input type="checkbox" id="applianceCheck" /> Detect applause breaks
+        </label>
+        <button id="detectBtn" style="margin-top: 8px;">Detect Breaks</button>
+      </div>
+
+      <div id="tab-paste" class="tab-content">
+        <label>Paste Timestamps</label>
+        <textarea id="timestampInput" placeholder="[00:00] Song One&#10;[04:10] Song Two&#10;..." rows="6"></textarea>
+        <button id="pasteBtn" style="margin-top: 8px;">Parse Timestamps</button>
+      </div>
+
+      <div id="tab-tags" class="tab-content">
+        <label>Genre/Genre (optional)</label>
+        <input type="text" id="genreInput" placeholder="e.g., Rock, Jazz, Classical"/>
+        <label>Artist</label>
+        <input type="text" id="artistInput" />
+        <label>Album</label>
+        <input type="text" id="albumInput" />
+        <label>Year</label>
+        <input type="text" id="yearInput" />
+      </div>
+    </div>
+
+    <!-- Tracks table -->
+    <div class="card">
+      <h3>Tracks</h3>
+      <div style="overflow-x: auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Start</th>
+              <th>End</th>
+              <th>Title</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="tracksTable">
+          </tbody>
+        </table>
+      </div>
+      <button id="splitBtn" style="margin-top: 12px;">Split & Download</button>
+    </div>
+  </div>
+
+  <audio id="preview" style="display: none;"></audio>
+
+  <script>
+    // Core MP3 parsing
+    /*__CORE__*/
+
+    // Analysis
+    /*__ANALYSIS__*/
+
+    const $ = (id) => document.getElementById(id);
+    const state = {
+      file: null,
+      pcm: null,
+      frames: null,
+      envelope: null,
+      breaks: [],
+      markers: [],
+      playing: false,
+      playhead: 0,
+      currentTrack: 0,
+    };
+
+    // Theme
+    function initTheme() {
+      const saved = localStorage.getItem('theme') || 'light';
+      document.documentElement.setAttribute('data-theme', saved);
+      updateThemeBtn();
+    }
+
+    function updateThemeBtn() {
+      const theme = document.documentElement.getAttribute('data-theme') || 'light';
+      $('themeBtn').textContent = theme === 'dark' ? '☀️ Light' : '🌙 Dark';
+    }
+
+    $('themeBtn').onclick = () => {
+      const current = document.documentElement.getAttribute('data-theme') || 'light';
+      const next = current === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      try { localStorage.setItem('theme', next); } catch(e) {}
+      updateThemeBtn();
+    };
+
+    // File loading
+    $('fileInput').onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      state.file = await file.arrayBuffer();
+      const chunks = Math.ceil(state.file.byteLength / (44100 * 2 * 20));
+      let decoded = [];
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      for (let i = 0; i < chunks; i++) {
+        $('readProgress').style.width = ((i + 1) / chunks * 100) + '%';
+        const chunk = state.file.slice(i * 44100 * 2 * 20, (i + 1) * 44100 * 2 * 20);
+        try {
+          const ab = await ctx.decodeAudioData(chunk);
+          decoded.push(...ab.getChannelData(0));
+        } catch (err) {
+          console.error('Decode error:', err);
+        }
+      }
+      state.pcm = new Float32Array(decoded);
+      state.frames = window.MP3Core.parseMp3(new Uint8Array(state.file));
+      const sampleRate = state.frames.sampleRate || 44100;
+      state.envelope = window.MP3Analysis.buildEnvelope(state.pcm, sampleRate);
+      $('fileInfo').textContent = `Loaded: ${(state.file.byteLength / 1e6).toFixed(2)} MB, ${(state.envelope.length * 0.01).toFixed(1)}s`;
+      drawWaveform();
+    };
+
+    function drawWaveform() {
+      const canvas = $('waveform');
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--field').trim();
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      if (!state.envelope) return;
+      ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i < state.envelope.length; i++) {
+        const x = (i / state.envelope.length) * canvas.width;
+        const db = state.envelope[i].rms;
+        const y = canvas.height - ((db + 60) / 60) * canvas.height;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+
+    // Marker management
+    function updateMarkers() {
+      const table = $('tracksTable');
+      table.innerHTML = '';
+      const times = [0, ...state.breaks];
+      for (let i = 0; i < times.length - 1; i++) {
+        const start = times[i];
+        const end = times[i + 1];
+        const title = state.markers[i]?.title || `Track ${i + 1}`;
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${i + 1}</td>
+          <td>${formatTime(start)}</td>
+          <td>${formatTime(end)}</td>
+          <td><input type="text" value="${title}" onchange="state.markers[${i}] = {title: this.value}"/></td>
+          <td><button onclick="deleteMarker(${i})">×</button></td>
+        `;
+        table.appendChild(row);
+      }
+    }
+
+    function formatTime(seconds) {
+      const m = Math.floor(seconds / 60);
+      const s = Math.floor(seconds % 60);
+      const ms = Math.floor((seconds % 1) * 10);
+      return `${m}:${String(s).padStart(2, '0')}.${ms}`;
+    }
+
+    function deleteMarker(i) {
+      state.breaks.splice(i + 1, 1);
+      updateMarkers();
+    }
+
+    // Auto-detect
+    $('detectBtn').onclick = () => {
+      if (!state.envelope) return;
+      const opts = {
+        quietDropDb: parseInt($('quietSlider').value),
+        minGap: parseFloat($('gapSlider').value),
+        applause: $('applianceCheck').checked,
+      };
+      const breaks = window.MP3Analysis.detectBreaks(state.envelope, opts);
+      state.breaks = [0, ...breaks];
+      state.markers = state.breaks.map((t, i) => ({title: `Track ${i + 1}`}));
+      updateMarkers();
+    };
+
+    // Parse timestamps
+    $('pasteBtn').onclick = () => {
+      const text = $('timestampInput').value;
+      const marks = window.MP3Core.parseTimestamps(text);
+      state.breaks = [0, ...marks.map(m => m.time)];
+      state.markers = marks.map(m => ({title: m.title}));
+      updateMarkers();
+    };
+
+    // Split & Download
+    $('splitBtn').onclick = async () => {
+      if (!state.file || state.breaks.length < 2) {
+        alert('Load file and set breaks first');
+        return;
+      }
+      const data = new Uint8Array(state.file);
+      const tracks = [];
+      const sampleRate = state.frames.sampleRate || 44100;
+      for (let i = 0; i < state.breaks.length - 1; i++) {
+        const start = state.breaks[i];
+        const end = state.breaks[i + 1];
+        const tags = {
+          title: state.markers[i]?.title || `Track ${i + 1}`,
+          artist: $('artistInput').value,
+          album: $('albumInput').value,
+          year: $('yearInput').value,
+          genre: $('genreInput').value,
+          track: String(i + 1),
+        };
+        const cut = window.MP3Core.cutTrack(data, state.frames, start, end, tags);
+        const filename = window.MP3Core.sanitizeFilename(tags.title) + '.mp3';
+        tracks.push({filename, data: cut.data});
+      }
+      const zip = window.MP3Core.buildZip(tracks, 'tracks.zip');
+      const url = URL.createObjectURL(new Blob([zip]));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'tracks.zip';
+      a.click();
+    };
+
+    // Playback
+    const player = $('player');
+    $('playBtn').onclick = () => {
+      if (!state.file) return;
+      const blob = new Blob([state.file]);
+      player.src = URL.createObjectURL(blob);
+      player.play();
+      state.playing = true;
+    };
+
+    $('pauseBtn').onclick = () => player.pause();
+
+    player.ontimeupdate = () => {
+      state.playhead = player.currentTime;
+      $('timeDisplay').textContent = `${formatTime(player.currentTime)} / ${formatTime(player.duration || 0)}`;
+    };
+
+    // Transport buttons
+    $('startBtn').onclick = () => player.currentTime = state.breaks[Math.max(0, state.currentTrack - 1)] || 0;
+    $('endBtn').onclick = () => player.currentTime = state.breaks[Math.min(state.breaks.length - 1, state.currentTrack + 1)] || player.duration;
+    $('prevBreakBtn').onclick = () => {
+      state.currentTrack = Math.max(0, state.currentTrack - 1);
+      player.currentTime = state.breaks[state.currentTrack] || 0;
+    };
+    $('nextBreakBtn').onclick = () => {
+      state.currentTrack = Math.min(state.breaks.length - 1, state.currentTrack + 1);
+      player.currentTime = state.breaks[state.currentTrack] || 0;
+    };
+
+    // Tab switching
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.onclick = () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+        tab.classList.add('active');
+        const tabId = tab.getAttribute('data-tab');
+        $(`tab-${tabId}`).classList.add('active');
+      };
+    });
+
+    initTheme();
+  </script>
+</body>
+</html>

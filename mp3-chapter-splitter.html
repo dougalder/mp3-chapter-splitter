@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MP3 Chapter Splitter</title>
+  <style>
+    :root {
+      --bg: #fafafa;
+      --fg: #333;
+      --border: #ddd;
+      --card: #fff;
+      --accent: #0066cc;
+      --field: #f5f5f5;
+      --placeholder: #999;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #1a1a1a;
+        --fg: #e0e0e0;
+        --border: #333;
+        --card: #2a2a2a;
+        --accent: #66b3ff;
+        --field: #333;
+        --placeholder: #888;
+      }
+    }
+    :root[data-theme="dark"] {
+      --bg: #1a1a1a;
+      --fg: #e0e0e0;
+      --border: #333;
+      --card: #2a2a2a;
+      --accent: #66b3ff;
+      --field: #333;
+      --placeholder: #888;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 0;
+      font: 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      transition: background 0.3s, color 0.3s;
+    }
+    header {
+      padding: 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    h1 { margin: 0; font-size: 24px; }
+    button {
+      padding: 8px 16px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--fg);
+      cursor: pointer;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    button:hover {
+      background: var(--field);
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    input[type="file"],
+    input[type="text"],
+    textarea,
+    select {
+      padding: 8px;
+      border: 1px solid var(--border);
+      background: var(--field);
+      color: var(--fg);
+      border-radius: 4px;
+      font-size: 14px;
+      font-family: inherit;
+      width: 100%;
+      margin: 4px 0;
+    }
+    input[type="text"]::placeholder,
+    textarea::placeholder {
+      color: var(--placeholder);
+    }
+    label {
+      display: block;
+      margin-top: 8px;
+      font-weight: 500;
+    }
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+    .tab {
+      padding: 8px 16px;
+      cursor: pointer;
+      border: none;
+      background: transparent;
+      color: var(--placeholder);
+      border-bottom: 2px solid transparent;
+    }
+    .tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+    }
+    canvas {
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      display: block;
+      width: 100%;
+      height: auto;
+      background: var(--field);
+      cursor: crosshair;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    tr {
+      border-bottom: 1px solid var(--border);
+    }
+    th, td {
+      padding: 8px;
+      text-align: left;
+    }
+    th {
+      background: var(--field);
+      font-weight: 600;
+    }
+    .progress-bar {
+      width: 100%;
+      height: 4px;
+      background: var(--field);
+      border-radius: 2px;
+      overflow: hidden;
+      margin: 8px 0;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--accent);
+      width: 0%;
+      transition: width 0.1s;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>MP3 Chapter Splitter</h1>
+    <button id="themeBtn">🌙 Dark</button>
+  </header>
+
+  <div class="container">
+    <!-- File upload -->
+    <div class="card">
+      <label>Load MP3 File</label>
+      <input type="file" id="fileInput" accept=".mp3" />
+      <div class="progress-bar">
+        <div class="progress-bar-fill" id="readProgress"></div>
+      </div>
+      <div id="fileInfo"></div>
+    </div>
+
+    <!-- Waveform -->
+    <div class="card">
+      <label>Waveform & Timeline</label>
+      <canvas id="waveform" width="800" height="120"></canvas>
+      <div style="margin-top: 8px; font-size: 12px;">
+        <span id="timeDisplay">0:00 / 0:00</span>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="card">
+      <button id="playBtn">▶ Play</button>
+      <button id="pauseBtn">⏸ Pause</button>
+      <button id="startBtn">⏮ Start</button>
+      <button id="endBtn">⏭ End</button>
+      <button id="prevBreakBtn">← Prev Break</button>
+      <button id="nextBreakBtn">Next Break →</button>
+      <audio id="player" style="display: none;"></audio>
+    </div>
+
+    <!-- Settings tabs -->
+    <div class="card">
+      <div class="tabs">
+        <button class="tab active" data-tab="find">Auto-Detect</button>
+        <button class="tab" data-tab="paste">Paste Timestamps</button>
+        <button class="tab" data-tab="tags">Tags</button>
+      </div>
+
+      <div id="tab-find" class="tab-content active">
+        <label>Detection Options</label>
+        <label>Quiet threshold (dB): <input type="range" id="quietSlider" min="-60" max="-20" value="-38" step="1" style="width: auto;"/></label>
+        <label>Min gap (sec): <input type="range" id="gapSlider" min="0.5" max="5" value="1.2" step="0.1" style="width: auto;"/></label>
+        <label>
+          <input type="checkbox" id="applianceCheck" /> Detect applause breaks
+        </label>
+        <button id="detectBtn" style="margin-top: 8px;">Detect Breaks</button>
+      </div>
+
+      <div id="tab-paste" class="tab-content">
+        <label>Paste Timestamps</label>
+        <textarea id="timestampInput" placeholder="[00:00] Song One&#10;[04:10] Song Two&#10;..." rows="6"></textarea>
+        <button id="pasteBtn" style="margin-top: 8px;">Parse Timestamps</button>
+      </div>
+
+      <div id="tab-tags" class="tab-content">
+        <label>Genre/Genre (optional)</label>
+        <input type="text" id="genreInput" placeholder="e.g., Rock, Jazz, Classical"/>
+        <label>Artist</label>
+        <input type="text" id="artistInput" />
+        <label>Album</label>
+        <input type="text" id="albumInput" />
+        <label>Year</label>
+        <input type="text" id="yearInput" />
+      </div>
+    </div>
+
+    <!-- Tracks table -->
+    <div class="card">
+      <h3>Tracks</h3>
+      <div style="overflow-x: auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Start</th>
+              <th>End</th>
+              <th>Title</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="tracksTable">
+          </tbody>
+        </table>
+      </div>
+      <button id="splitBtn" style="margin-top: 12px;">Split & Download</button>
+    </div>
+  </div>
+
+  <audio id="preview" style="display: none;"></audio>
+
+  <script>
+    // Core MP3 parsing
+    'use strict';
+
+const TS_RE = /(?:\[\s*)?(\d{1,3}):([0-5]?\d)(?::([0-5]?\d))?(?:\s*\])?(?:\s*\((?:[^()]|\([^()]*\))*\))?/g;
+
+function parseTimestamps(text) {
+  const marks = [];
+  let m;
+  while ((m = TS_RE.exec(text)) !== null) {
+    if (text[m.index - 1] === '(' && text[m.index + m[0].length] === ')') continue;
+    const h = parseInt(m[1]), min = parseInt(m[2]), s = m[3] ? parseInt(m[3]) : 0;
+    const time = h * 3600 + min * 60 + s;
+    let end = m.index + m[0].length;
+    while (end < text.length && /\s/.test(text[end])) end++;
+    let title = '';
+    while (end < text.length && text[end] !== '[') {
+      const nl = text.indexOf('\n', end);
+      if (nl === -1 || nl > end + 100) { title = text.slice(end, end + 100).trim(); break; }
+      const line = text.slice(end, nl).trim();
+      if (line) { title = line; break; }
+      end = nl + 1;
+    }
+    marks.push({time, title: cleanTitle(title)});
+  }
+  return marks;
+}
+
+function cleanTitle(s) {
+  return s.replace(/[\x00-\x1f<>:"|?*]/g, '').replace(/[.]{2,}|\/+|\\+/g, '').trim().slice(0, 200);
+}
+
+function sanitizeFilename(s) {
+  return cleanTitle(s).replace(/\s+/g, '_');
+}
+
+const MPEG_VERSION = {3: 'MPEG1', 2: 'MPEG2', 0: 'MPEG25'};
+const LAYER = {3: 'I', 2: 'II', 1: 'III'};
+const BR_TABLE = {
+  3: { 3: [0,32,64,96,128,160,192,224,256,288,320,352,384,416,448],
+       2: [0,32,48,56,64,80,96,112,128,160,192,224,256,320,384],
+       1: [0,32,48,56,64,80,96,112,128,160,192,224,256,320,384] },
+  2: { 3: [0,32,48,56,64,80,96,112,128,144,160,176,192,224,256],
+       2: [0,8,16,24,32,40,48,56,64,80,96,112,128,144,160],
+       1: [0,8,16,24,32,40,48,56,64,80,96,112,128,144,160] },
+  0: { 3: [0,32,48,56,64,80,96,112,128,144,160,176,192,224,256],
+       2: [0,8,16,24,32,40,48,56,64,80,96,112,128,144,160],
+       1: [0,8,16,24,32,40,48,56,64,80,96,112,128,144,160] }
+};
+const SR_TABLE = {
+  3: [44100, 48000, 32000],
+  2: [22050, 24000, 16000],
+  0: [11025, 12000, 8000]
+};
+
+function parseHeader(data, pos) {
+  if (pos + 4 > data.length) return null;
+  const b = data.readUInt32BE(pos);
+  if ((b & 0xFFE00000) !== 0xFFE00000) return null;
+  const versionBits = (b >>> 19) & 3;
+  const layerBits = (b >>> 17) & 3;
+  if (versionBits === 1 || layerBits === 0) return null;
+  const bitrateIdx = (b >>> 12) & 0xF;
+  const srIdx = (b >>> 10) & 3;
+  const padding = (b >>> 9) & 1;
+  const priv = (b >>> 8) & 1;
+  const channelMode = (b >>> 6) & 3;
+  const modeExt = (b >>> 4) & 3;
+  const copyright = (b >>> 3) & 1;
+  const original = (b >>> 2) & 1;
+  const emphasis = b & 3;
+  const bitrate = BR_TABLE[versionBits][layerBits][bitrateIdx];
+  if (!bitrate) return null;
+  const sampleRate = SR_TABLE[versionBits][srIdx];
+  const frameLen = Math.floor(144000 * bitrate / sampleRate + padding);
+  return {versionBits, layerBits, bitrate, sampleRate, padding, channelMode, frameLen, priv, modeExt, copyright, original, emphasis};
+}
+
+function sideInfoSize(h) {
+  if (h.versionBits === 3) return h.channelMode === 3 ? 17 : 32;
+  return h.channelMode === 3 ? 9 : 17;
+}
+
+function frameIndexAt(data, targetTime, sampleRate) {
+  let pos = 0, time = 0, frameCount = 0;
+  while (pos < data.length) {
+    if (data[pos] !== 0xFF) { pos++; continue; }
+    const h = parseHeader(data, pos);
+    if (!h) { pos++; continue; }
+    if (time >= targetTime) return {pos, time, frameCount};
+    pos += h.frameLen;
+    time += h.frameLen * 1000 / h.sampleRate;
+    frameCount++;
+  }
+  return {pos, time, frameCount};
+}
+
+function parseMp3(data) {
+  const frames = [];
+  let pos = 0;
+  while (pos < data.length && frames.length < 30000) {
+    if (data[pos] !== 0xFF) { pos++; continue; }
+    const h = parseHeader(data, pos);
+    if (!h) { pos++; continue; }
+    frames.push({pos, header: h, time: frames.length ? frames[frames.length - 1].time + h.frameLen * 1000 / h.sampleRate : 0});
+    pos += h.frameLen;
+  }
+  return {frames, sampleRate: frames.length ? frames[0].header.sampleRate : 0, duration: frames.length ? frames[frames.length - 1].time : 0};
+}
+
+function buildXingFrame(frameCount, duration, frames) {
+  const xing = Buffer.alloc(36);
+  xing.write('Xing');
+  xing[4] = 0x0F;
+  xing.writeUInt32BE(frameCount, 8);
+  xing.writeUInt32BE(Math.round(duration), 12);
+  const toc = Buffer.alloc(100);
+  for (let i = 0; i < 100; i++) {
+    const targetTime = (i + 1) * duration / 100;
+    const frameIdx = frames.findIndex(f => f.time >= targetTime);
+    toc[i] = frameIdx >= 0 ? Math.round(frameIdx * 255 / frames.length) : 255;
+  }
+  toc.copy(xing, 16);
+  return xing;
+}
+
+function buildId3(tags) {
+  const frames = [];
+  if (tags.title) frames.push(buildTextFrame('TIT2', tags.title));
+  if (tags.artist) frames.push(buildTextFrame('TPE1', tags.artist));
+  if (tags.album) frames.push(buildTextFrame('TALB', tags.album));
+  if (tags.year) frames.push(buildTextFrame('TYER', tags.year));
+  if (tags.genre) frames.push(buildTextFrame('TCON', tags.genre));
+  if (tags.track) frames.push(buildTextFrame('TRCK', tags.track));
+  const frameData = Buffer.concat(frames);
+  const header = Buffer.alloc(10);
+  header.write('ID3');
+  header[3] = 3;
+  header[4] = 0;
+  header[5] = 0;
+  const size = frameData.length;
+  header[6] = (size >>> 21) & 0x7F;
+  header[7] = (size >>> 14) & 0x7F;
+  header[8] = (size >>> 7) & 0x7F;
+  header[9] = size & 0x7F;
+  return Buffer.concat([header, frameData]);
+}
+
+function buildTextFrame(id, text) {
+  const encoded = Buffer.from(text, 'utf16le');
+  const frame = Buffer.alloc(10 + encoded.length);
+  frame.write(id);
+  frame.writeUInt32BE(encoded.length + 1, 4);
+  frame[8] = 0;
+  frame[9] = 1;
+  frame[10] = 0xFF;
+  frame[11] = 0xFE;
+  encoded.copy(frame, 12);
+  return frame;
+}
+
+function cutTrack(bytes, info, startTime, endTime, tags, opts) {
+  const startIdx = frameIndexAt(bytes, startTime * 1000, info.sampleRate);
+  const endIdx = frameIndexAt(bytes, endTime * 1000, info.sampleRate);
+  const id3 = buildId3(tags);
+  const mp3Data = bytes.slice(startIdx.pos, endIdx.pos);
+  const frameDuration = info.frames[0].header.frameLen / info.sampleRate;
+  const actualStart = startIdx.time / 1000;
+  const actualEnd = endIdx.time / 1000;
+  const duration = actualEnd - actualStart;
+  return {data: Buffer.concat([id3, mp3Data]), actualStart, actualEnd, duration, frameCount: endIdx.frameCount - startIdx.frameCount};
+}
+
+function pad(s, width, char = '\x00') {
+  return s + char.repeat(Math.max(0, width - s.length));
+}
+
+let crc32Table;
+function initCrc32() {
+  crc32Table = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? 0xEDB88320 ^ (c >>> 1) : c >>> 1;
+    crc32Table[i] = c >>> 0;
+  }
+}
+
+function crc32(data) {
+  if (!crc32Table) initCrc32();
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < data.length; i++) c = crc32Table[(c ^ data[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
+function buildZip(tracks, filename) {
+  const localHeaders = [];
+  const centralHeaders = [];
+  let offset = 0;
+  for (const track of tracks) {
+    const nameUtf8 = Buffer.from(track.filename, 'utf8');
+    const localHeader = Buffer.alloc(30 + nameUtf8.length);
+    let pos = 0;
+    localHeader.writeUInt32LE(0x04034b50, pos); pos += 4;
+    localHeader.writeUInt16LE(20, pos); pos += 2;
+    localHeader.writeUInt16LE(0x0800, pos); pos += 2;
+    localHeader.writeUInt16LE(0, pos); pos += 2;
+    localHeader.writeUInt16LE(0, pos); pos += 2;
+    localHeader.writeUInt32LE(0x21, pos); pos += 4;
+    const crc = crc32(track.data);
+    localHeader.writeUInt32LE(crc, pos); pos += 4;
+    localHeader.writeUInt32LE(track.data.length, pos); pos += 4;
+    localHeader.writeUInt32LE(track.data.length, pos); pos += 4;
+    localHeader.writeUInt16LE(nameUtf8.length, pos); pos += 2;
+    localHeader.writeUInt16LE(0, pos); pos += 2;
+    nameUtf8.copy(localHeader, pos);
+    localHeaders.push(localHeader);
+    localHeaders.push(track.data);
+    const centralHeader = Buffer.alloc(46 + nameUtf8.length);
+    pos = 0;
+    centralHeader.writeUInt32LE(0x02014b50, pos); pos += 4;
+    centralHeader.writeUInt16LE(20, pos); pos += 2;
+    centralHeader.writeUInt16LE(20, pos); pos += 2;
+    centralHeader.writeUInt16LE(0, pos); pos += 2;
+    centralHeader.writeUInt16LE(0, pos); pos += 2;
+    centralHeader.writeUInt16LE(0x21, pos); pos += 2;
+    centralHeader.writeUInt32LE(0, pos); pos += 4;
+    centralHeader.writeUInt32LE(crc, pos); pos += 4;
+    centralHeader.writeUInt32LE(track.data.length, pos); pos += 4;
+    centralHeader.writeUInt32LE(track.data.length, pos); pos += 4;
+    centralHeader.writeUInt16LE(nameUtf8.length, pos); pos += 2;
+    centralHeader.writeUInt16LE(0, pos); pos += 2;
+    centralHeader.writeUInt16LE(0, pos); pos += 2;
+    centralHeader.writeUInt16LE(0, pos); pos += 2;
+    centralHeader.writeUInt16LE(0, pos); pos += 2;
+    centralHeader.writeUInt32LE(0, pos); pos += 4;
+    centralHeader.writeUInt32LE(offset, pos); pos += 4;
+    nameUtf8.copy(centralHeader, pos);
+    offset += localHeader.length + track.data.length;
+    centralHeaders.push(centralHeader);
+  }
+  const allCentral = Buffer.concat(centralHeaders);
+  const eocd = Buffer.alloc(22);
+  let pos = 0;
+  eocd.writeUInt32LE(0x06054b50, pos); pos += 4;
+  eocd.writeUInt16LE(0, pos); pos += 2;
+  eocd.writeUInt16LE(0, pos); pos += 2;
+  eocd.writeUInt16LE(centralHeaders.length, pos); pos += 2;
+  eocd.writeUInt16LE(centralHeaders.length, pos); pos += 2;
+  eocd.writeUInt32LE(allCentral.length, pos); pos += 4;
+  eocd.writeUInt32LE(offset, pos); pos += 4;
+  eocd.writeUInt16LE(0, pos); pos += 2;
+  return Buffer.concat([...localHeaders, allCentral, eocd]);
+}
+
+if (typeof module !== 'undefined') module.exports = {parseMp3, parseTimestamps, cutTrack, buildZip, buildId3, buildXingFrame, sanitizeFilename, pad, crc32, frameIndexAt, parseHeader, cleanTitle};
+if (typeof window !== 'undefined') window.MP3Core = {parseMp3, parseTimestamps, cutTrack, buildZip, buildId3, buildXingFrame, sanitizeFilename, pad, crc32, frameIndexAt, parseHeader, cleanTitle};
+
+
+    // Analysis
+    'use strict';
+
+const BUCKET = 0.01; // 10 ms
+const DETECT_DEFAULTS = {
+  quietDropDb: -38,
+  minGap: 1.2,
+  minTrack: 45,
+  applause: false,
+  zcrNoise: 0.22,
+  maxTracks: 80,
+};
+
+function percentile(arr, p) {
+  if (!arr.length) return 0;
+  const sorted = [...arr].sort((a, b) => a - b);
+  const idx = Math.ceil(sorted.length * p / 100) - 1;
+  return sorted[Math.max(0, idx)];
+}
+
+function buildEnvelope(pcm, sampleRate) {
+  const bucketLen = Math.floor(sampleRate * BUCKET);
+  const buckets = [];
+  for (let i = 0; i < pcm.length; i += bucketLen) {
+    const slice = pcm.slice(i, i + bucketLen);
+    if (!slice.length) continue;
+    let rms = 0, peak = 0, zcr = 0;
+    for (let j = 0; j < slice.length; j++) {
+      const s = Math.abs(slice[j]);
+      rms += s * s;
+      peak = Math.max(peak, s);
+      if (j > 0 && slice[j - 1] * slice[j] < 0) zcr++;
+    }
+    rms = Math.sqrt(rms / slice.length);
+    const rmsDb = rms > 0 ? 20 * Math.log10(rms) : -100;
+    const zcrRate = zcr / slice.length;
+    buckets.push({rms: rmsDb, peak, zcr: zcrRate, time: i / sampleRate});
+  }
+  return buckets;
+}
+
+function detectBreaks(envelope, opts) {
+  opts = {... DETECT_DEFAULTS, ...opts};
+  const rms = envelope.map(b => b.rms);
+  const reference = percentile(rms, 90);
+  const quietLevel = reference + opts.quietDropDb;
+  const n = envelope.length;
+  const flag = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    if (rms[i] < quietLevel) { flag[i] = 1; continue; }
+    if (opts.applause && envelope[i].zcr > opts.zcrNoise && rms[i] < reference + 2) flag[i] = 2;
+  }
+  const gaps = [];
+  let i = 0;
+  while (i < n) {
+    if (flag[i] > 0) {
+      const from = i;
+      while (i < n && flag[i] > 0) i++;
+      const to = i;
+      const len = (to - from) * BUCKET;
+      if (len >= opts.minGap) {
+        const breakTime = Math.max(0, envelope[to - 1].time - Math.min(0.4, len * 0.4));
+        gaps.push({from, to, len, breakTime, time: to * BUCKET});
+      }
+    } else i++;
+  }
+  gaps.sort((a, b) => b.len - a.len);
+  const chosen = [0];
+  for (const g of gaps) {
+    const tooClose = chosen.some(idx => Math.abs(g.breakTime - envelope[idx].time) < opts.minTrack);
+    if (!tooClose && chosen.length < opts.maxTracks) chosen.push(g.from);
+  }
+  chosen.sort((a, b) => a - b);
+  return chosen.map(i => envelope[i].time);
+}
+
+if (typeof module !== 'undefined') module.exports = {buildEnvelope, detectBreaks, DETECT_DEFAULTS, BUCKET, percentile};
+if (typeof window !== 'undefined') window.MP3Analysis = {buildEnvelope, detectBreaks, DETECT_DEFAULTS, BUCKET, percentile};
+
+
+    const $ = (id) => document.getElementById(id);
+    const state = {
+      file: null,
+      pcm: null,
+      frames: null,
+      envelope: null,
+      breaks: [],
+      markers: [],
+      playing: false,
+      playhead: 0,
+      currentTrack: 0,
+    };
+
+    // Theme
+    function initTheme() {
+      const saved = localStorage.getItem('theme') || 'light';
+      document.documentElement.setAttribute('data-theme', saved);
+      updateThemeBtn();
+    }
+
+    function updateThemeBtn() {
+      const theme = document.documentElement.getAttribute('data-theme') || 'light';
+      $('themeBtn').textContent = theme === 'dark' ? '☀️ Light' : '🌙 Dark';
+    }
+
+    $('themeBtn').onclick = () => {
+      const current = document.documentElement.getAttribute('data-theme') || 'light';
+      const next = current === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      try { localStorage.setItem('theme', next); } catch(e) {}
+      updateThemeBtn();
+    };
+
+    // File loading
+    $('fileInput').onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      state.file = await file.arrayBuffer();
+      const chunks = Math.ceil(state.file.byteLength / (44100 * 2 * 20));
+      let decoded = [];
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      for (let i = 0; i < chunks; i++) {
+        $('readProgress').style.width = ((i + 1) / chunks * 100) + '%';
+        const chunk = state.file.slice(i * 44100 * 2 * 20, (i + 1) * 44100 * 2 * 20);
+        try {
+          const ab = await ctx.decodeAudioData(chunk);
+          decoded.push(...ab.getChannelData(0));
+        } catch (err) {
+          console.error('Decode error:', err);
+        }
+      }
+      state.pcm = new Float32Array(decoded);
+      state.frames = window.MP3Core.parseMp3(new Uint8Array(state.file));
+      const sampleRate = state.frames.sampleRate || 44100;
+      state.envelope = window.MP3Analysis.buildEnvelope(state.pcm, sampleRate);
+      $('fileInfo').textContent = `Loaded: ${(state.file.byteLength / 1e6).toFixed(2)} MB, ${(state.envelope.length * 0.01).toFixed(1)}s`;
+      drawWaveform();
+    };
+
+    function drawWaveform() {
+      const canvas = $('waveform');
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--field').trim();
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      if (!state.envelope) return;
+      ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i < state.envelope.length; i++) {
+        const x = (i / state.envelope.length) * canvas.width;
+        const db = state.envelope[i].rms;
+        const y = canvas.height - ((db + 60) / 60) * canvas.height;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+
+    // Marker management
+    function updateMarkers() {
+      const table = $('tracksTable');
+      table.innerHTML = '';
+      const times = [0, ...state.breaks];
+      for (let i = 0; i < times.length - 1; i++) {
+        const start = times[i];
+        const end = times[i + 1];
+        const title = state.markers[i]?.title || `Track ${i + 1}`;
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${i + 1}</td>
+          <td>${formatTime(start)}</td>
+          <td>${formatTime(end)}</td>
+          <td><input type="text" value="${title}" onchange="state.markers[${i}] = {title: this.value}"/></td>
+          <td><button onclick="deleteMarker(${i})">×</button></td>
+        `;
+        table.appendChild(row);
+      }
+    }
+
+    function formatTime(seconds) {
+      const m = Math.floor(seconds / 60);
+      const s = Math.floor(seconds % 60);
+      const ms = Math.floor((seconds % 1) * 10);
+      return `${m}:${String(s).padStart(2, '0')}.${ms}`;
+    }
+
+    function deleteMarker(i) {
+      state.breaks.splice(i + 1, 1);
+      updateMarkers();
+    }
+
+    // Auto-detect
+    $('detectBtn').onclick = () => {
+      if (!state.envelope) return;
+      const opts = {
+        quietDropDb: parseInt($('quietSlider').value),
+        minGap: parseFloat($('gapSlider').value),
+        applause: $('applianceCheck').checked,
+      };
+      const breaks = window.MP3Analysis.detectBreaks(state.envelope, opts);
+      state.breaks = [0, ...breaks];
+      state.markers = state.breaks.map((t, i) => ({title: `Track ${i + 1}`}));
+      updateMarkers();
+    };
+
+    // Parse timestamps
+    $('pasteBtn').onclick = () => {
+      const text = $('timestampInput').value;
+      const marks = window.MP3Core.parseTimestamps(text);
+      state.breaks = [0, ...marks.map(m => m.time)];
+      state.markers = marks.map(m => ({title: m.title}));
+      updateMarkers();
+    };
+
+    // Split & Download
+    $('splitBtn').onclick = async () => {
+      if (!state.file || state.breaks.length < 2) {
+        alert('Load file and set breaks first');
+        return;
+      }
+      const data = new Uint8Array(state.file);
+      const tracks = [];
+      const sampleRate = state.frames.sampleRate || 44100;
+      for (let i = 0; i < state.breaks.length - 1; i++) {
+        const start = state.breaks[i];
+        const end = state.breaks[i + 1];
+        const tags = {
+          title: state.markers[i]?.title || `Track ${i + 1}`,
+          artist: $('artistInput').value,
+          album: $('albumInput').value,
+          year: $('yearInput').value,
+          genre: $('genreInput').value,
+          track: String(i + 1),
+        };
+        const cut = window.MP3Core.cutTrack(data, state.frames, start, end, tags);
+        const filename = window.MP3Core.sanitizeFilename(tags.title) + '.mp3';
+        tracks.push({filename, data: cut.data});
+      }
+      const zip = window.MP3Core.buildZip(tracks, 'tracks.zip');
+      const url = URL.createObjectURL(new Blob([zip]));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'tracks.zip';
+      a.click();
+    };
+
+    // Playback
+    const player = $('player');
+    $('playBtn').onclick = () => {
+      if (!state.file) return;
+      const blob = new Blob([state.file]);
+      player.src = URL.createObjectURL(blob);
+      player.play();
+      state.playing = true;
+    };
+
+    $('pauseBtn').onclick = () => player.pause();
+
+    player.ontimeupdate = () => {
+      state.playhead = player.currentTime;
+      $('timeDisplay').textContent = `${formatTime(player.currentTime)} / ${formatTime(player.duration || 0)}`;
+    };
+
+    // Transport buttons
+    $('startBtn').onclick = () => player.currentTime = state.breaks[Math.max(0, state.currentTrack - 1)] || 0;
+    $('endBtn').onclick = () => player.currentTime = state.breaks[Math.min(state.breaks.length - 1, state.currentTrack + 1)] || player.duration;
+    $('prevBreakBtn').onclick = () => {
+      state.currentTrack = Math.max(0, state.currentTrack - 1);
+      player.currentTime = state.breaks[state.currentTrack] || 0;
+    };
+    $('nextBreakBtn').onclick = () => {
+      state.currentTrack = Math.min(state.breaks.length - 1, state.currentTrack + 1);
+      player.currentTime = state.breaks[state.currentTrack] || 0;
+    };
+
+    // Tab switching
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.onclick = () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+        tab.classList.add('active');
+        const tabId = tab.getAttribute('data-tab');
+        $(`tab-${tabId}`).classList.add('active');
+      };
+    });
+
+    initTheme();
+  </script>
+</body>
+</html>
