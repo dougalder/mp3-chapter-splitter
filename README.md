@@ -1,5 +1,6 @@
 # MP3 Chapter Splitter
 
+[Launch MP3 Chapter Splitter](https://dougalder.github.io/mp3-chapter-splitter/)
 A browser-based tool for splitting MP3 files into chapters, with automatic silence/break detection or manual timestamp parsing.
 
 **Live Demo:** Open `index.html` in your browser and then click through to `mp3-chapter-splitter.html`.
