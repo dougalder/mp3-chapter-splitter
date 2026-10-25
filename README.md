@@ -1,6 +1,10 @@
 # MP3 Chapter Splitter
 
-Split one long MP3 (a concert, a DJ set, an audiobook, a whole album in one file) into separate, tagged tracks, **entirely in your browser**. Nothing is uploaded.
+[Launch MP3 Chapter Splitter](https://dougalder.github.io/mp3-chapter-splitter/)
+
+Split one long MP3 (a concert, a DJ set, an audiobook, a whole album in one file) into separate, tagged tracks, entirely in your browser. Nothing is uploaded.
+
+A browser-based tool for splitting MP3 files into chapters, with automatic silence/break detection or manual timestamp parsing.
 
 Find the track boundaries by **listening to the audio** (quiet gaps, or applause on live recordings) or by **pasting YouTube-style timestamps**, tidy them up on an interactive waveform, name the tracks, and download a ZIP. The audio is cut **losslessly**: frames are copied, never re-encoded.
 
