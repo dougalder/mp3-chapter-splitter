@@ -1,38 +1,21 @@
 {
   "name": "mp3-chapter-splitter",
   "version": "1.0.0",
-  "description": "Browser-based tool for splitting MP3 files into chapters with automatic break detection",
-  "main": "core.js",
+  "description": "Split a long MP3 into tagged tracks in your browser: detect breaks from the audio or paste YouTube timestamps. Lossless, no upload.",
   "scripts": {
     "build": "node build.js",
-    "test": "node test.js && node analysis-test.js && node e2e.js && node theme-test.js",
-    "test:browser": "playwright test wave-e2e.js",
-    "test:all": "npm run build && npm test && npm run test:browser"
+    "test": "node test.js && node analysis-test.js",
+    "test:browser": "node build.js && node wave-e2e.js",
+    "test:all": "npm test && npm run test:browser",
+    "screenshots": "node build.js && node capture_screenshots.js",
+    "fixtures": "python3 gen_fixtures.py"
   },
-  "keywords": [
-    "mp3",
-    "split",
-    "chapters",
-    "audio",
-    "browser",
-    "web-audio",
-    "id3"
-  ],
+  "keywords": ["mp3", "split", "chapters", "audio", "browser", "id3", "youtube", "timestamps"],
   "author": "Doug Alder",
   "license": "MIT",
-  "engines": {
-    "node": ">=16.0.0"
-  },
-  "devDependencies": {
-    "@playwright/test": "^1.40.0",
-    "playwright": "^1.64.1"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/dougalder/mp3-chapter-splitter"
-  },
-  "bugs": {
-    "url": "https://github.com/dougalder/mp3-chapter-splitter/issues"
-  },
+  "engines": { "node": ">=18" },
+  "devDependencies": { "playwright": "^1.64.1" },
+  "repository": { "type": "git", "url": "git+https://github.com/dougalder/mp3-chapter-splitter.git" },
+  "bugs": { "url": "https://github.com/dougalder/mp3-chapter-splitter/issues" },
   "homepage": "https://github.com/dougalder/mp3-chapter-splitter"
 }

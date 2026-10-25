@@ -1,103 +1,49 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>MP3 Chapter Splitter</title>
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      max-width: 800px;
-      margin: 40px auto;
-      padding: 20px;
-      line-height: 1.6;
-      color: #333;
-    }
-    @media (prefers-color-scheme: dark) {
-      body { background: #1a1a1a; color: #e0e0e0; }
-      a { color: #66b3ff; }
-    }
-    h1 { font-size: 2.5em; margin: 0 0 20px 0; }
-    .button {
-      display: inline-block;
-      padding: 12px 24px;
-      background: #0066cc;
-      color: white;
-      text-decoration: none;
-      border-radius: 4px;
-      font-weight: 500;
-      margin: 10px 10px 10px 0;
-    }
-    .button:hover { background: #0052a3; }
-    .feature-list { list-style: none; padding: 0; }
-    .feature-list li { padding: 8px 0; }
-    .feature-list li:before { content: "✓ "; color: #0066cc; font-weight: bold; }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MP3 Chapter Splitter</title>
+<meta name="description" content="Split a long MP3 into tagged tracks in your browser. Detect breaks from the audio or paste YouTube timestamps. Lossless, nothing is uploaded.">
+<style>
+  :root { --bg:#f6f5f3; --card:#fff; --ink:#1d1b19; --muted:#625e58; --line:#e2dfda; --accent:#b4461c; --accent-ink:#fff; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#17161a; --card:#201f24; --ink:#eeecea; --muted:#a9a49d; --line:#34323a; --accent:#ee7a45; --accent-ink:#17161a; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.6 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 48px 20px 40px; }
+  h1 { font-size: clamp(28px, 5vw, 40px); line-height: 1.15; margin: 0 0 12px; letter-spacing: -.02em; }
+  .lead { font-size: 18px; color: var(--muted); margin: 0 0 28px; max-width: 40em; }
+  .cta { display:inline-block; background:var(--accent); color:var(--accent-ink); text-decoration:none; font-weight:600; padding: 14px 26px; border-radius: 10px; }
+  .cta:hover { filter: brightness(1.08); }
+  .cta:focus-visible, a:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+  .links { margin: 16px 0 0; color: var(--muted); font-size: 15px; }
+  a { color: var(--accent); }
+  img.shot { display:block; width:100%; height:auto; margin: 36px 0 8px; border:1px solid var(--line); border-radius: 12px; background: var(--card); }
+  .cap { color: var(--muted); font-size: 14px; margin: 0 0 36px; }
+  ul.points { padding:0; margin: 0 0 32px; list-style:none; display:grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  ul.points li { background:var(--card); border:1px solid var(--line); border-radius:12px; padding: 16px 18px; }
+  ul.points b { display:block; margin-bottom:4px; }
+  footer { color: var(--muted); font-size: 14px; border-top: 1px solid var(--line); padding-top: 18px; }
+</style>
 </head>
 <body>
+<main>
   <h1>MP3 Chapter Splitter</h1>
+  <p class="lead">Split one long MP3 &mdash; a concert, a DJ set, a whole album in a single file &mdash; into separate, tagged tracks. It runs entirely in your browser, so nothing is uploaded.</p>
+  <a class="cta" href="mp3-chapter-splitter.html">Open the splitter &rarr;</a>
+  <p class="links"><a href="https://github.com/dougalder/mp3-chapter-splitter/blob/main/MANUAL.md">User manual</a> &middot; <a href="https://github.com/dougalder/mp3-chapter-splitter">Source on GitHub</a> &middot; MIT licence</p>
 
-  <p>A browser-based tool for splitting MP3 files into chapters with automatic beat detection or manual timestamps.</p>
+  <img class="shot" src="docs/images/03-overview-light.png" alt="The splitter with a 21-minute recording divided into six numbered tracks on a waveform, with the track list below">
+  <p class="cap">A 21-minute recording, split into six tracks. The numbered flags play when tapped and can be dragged.</p>
 
-  <h2>Features</h2>
-  <ul class="feature-list">
-    <li>Load MP3 files (any bitrate, mono or stereo)</li>
-    <li>Auto-detect chapter breaks by analyzing audio silence and dynamics</li>
-    <li>Paste timestamps from YouTube or manually enter break points</li>
-    <li>Edit chapter titles and metadata (artist, album, year, genre)</li>
-    <li>Real-time waveform visualization</li>
-    <li>Preview playback with timeline scrubbing</li>
-    <li>Export chapters as separate MP3 files in a ZIP archive</li>
-    <li>Dark mode support</li>
-    <li>Works entirely in your browser—no server upload needed</li>
+  <ul class="points">
+    <li><b>Finds the breaks for you</b>Listens for quiet gaps, or for applause on live recordings. Or paste a YouTube-style timestamp list.</li>
+    <li><b>Lossless</b>Audio is copied, never re-encoded. Cuts land within about 26&nbsp;ms of your markers.</li>
+    <li><b>Tagged and named</b>ID3 tags, track numbers, a style picker and clean filenames, delivered as a ZIP.</li>
+    <li><b>Private</b>No upload, no account, no network requests. Works offline once you have the file.</li>
   </ul>
 
-  <h2>Getting Started</h2>
-
-  <a href="mp3-chapter-splitter.html" class="button">Open MP3 Chapter Splitter →</a>
-
-  <h2>How to Use</h2>
-
-  <h3>Option 1: Auto-Detect</h3>
-  <ol>
-    <li>Click "Load MP3 File" and select your file</li>
-    <li>Open the "Auto-Detect" tab</li>
-    <li>Adjust detection sensitivity if needed</li>
-    <li>Click "Detect Breaks"</li>
-    <li>Review the detected chapters in the table</li>
-    <li>Edit chapter titles in the "Tags" tab</li>
-    <li>Click "Split & Download" to export</li>
-  </ol>
-
-  <h3>Option 2: Paste Timestamps</h3>
-  <ol>
-    <li>Load an MP3 file</li>
-    <li>Open the "Paste Timestamps" tab</li>
-    <li>Paste timestamps (from YouTube or manual format):<br/>
-        <code>[00:00] Chapter One<br/>[05:30] Chapter Two</code></li>
-    <li>Click "Parse Timestamps"</li>
-    <li>Review and edit in the table</li>
-    <li>Click "Split & Download"</li>
-  </ol>
-
-  <h2>Requirements</h2>
-  <p>A modern web browser with support for:</p>
-  <ul>
-    <li>Web Audio API (for MP3 decoding)</li>
-    <li>File System Access API (for folder save, or ZIP fallback)</li>
-    <li>Canvas 2D (for waveform visualization)</li>
-  </ul>
-
-  <h2>License</h2>
-  <p>MIT License © 2024 Doug Alder</p>
-
-  <h2>Technical Details</h2>
-  <p>The splitter uses frame-accurate lossless MP3 cutting (no re-encoding) and supports all standard MPEG-1/2/2.5 Layer III formats. It synthesizes proper ID3v2.3 tags and VBR headers for each output file.</p>
-
-  <hr>
-
-  <p style="font-size: 12px; color: #666;">
-    See <a href="MANUAL.md">MANUAL.md</a> for detailed documentation and <a href="README.md">README.md</a> for developer info.
-  </p>
+  <footer>Open <code>mp3-chapter-splitter.html</code> directly from your disk if you prefer; it is a single self-contained file.</footer>
+</main>
 </body>
 </html>

@@ -1,127 +1,71 @@
 #!/usr/bin/env node
-/**
- * Tests for analysis.js — audio envelope, break detection
- * 27 assertions on synthetic envelopes, silence patterns, applause, edge cases
- */
+// Detection tests: synthetic envelopes + real fixtures decoded by ffmpeg (buildEnvelope itself needs a
+// browser's Web Audio and is exercised in wave-e2e.js).
 'use strict';
-const assert = require('assert');
-const analysis = require('./analysis.js');
+const assert = require('assert'), path = require('path'), fs = require('fs');
+const { execFileSync } = require('child_process');
+const A = require('./analysis.js');
+let pass = 0, fail = 0;
+const t = (n, fn) => { try { fn(); pass++; console.log('  ok  ' + n); } catch (e) { fail++; console.log('FAIL  ' + n + '\n      ' + e.message); } };
+const FX = path.join(__dirname, 'fixtures');
+if (!fs.existsSync(path.join(FX, 'studio.mp3'))) execFileSync('python3', [path.join(__dirname, 'gen_fixtures.py')], { stdio: 'inherit' });
+const near = (got, want, tol, msg) => assert(Math.abs(got - want) <= tol, `${msg || ''} got ${got}, want ${want}±${tol}`);
+const B = A.BUCKET;
 
-let passCount = 0, failCount = 0;
-
-function test(name, fn) {
-  try {
-    fn();
-    console.log(`✓ ${name}`);
-    passCount++;
-  } catch (e) {
-    console.error(`✗ ${name}: ${e.message}`);
-    failCount++;
-  }
+// envelope from [seconds, rmsDb, zcr] segments
+function env(segs) {
+  const n = segs.reduce((a, [s]) => a + Math.round(s / B), 0), rms = new Float32Array(n), zcr = new Float32Array(n), peak = new Float32Array(n);
+  let o = 0; for (const [s, db, z] of segs) for (let i = 0; i < Math.round(s / B); i++) { rms[o] = db; zcr[o] = z; o++; }
+  return { bucket: B, n, duration: n * B, rms, peak, zcr };
 }
+const M = [-14, 0.015], times = (e, o) => A.detectBreaks(e, o).times;
 
-console.log('Testing analysis.js\n');
-
-// Percentile function
-test('percentile: 50th (median)', () => {
-  const arr = [1, 2, 3, 4, 5];
-  const p50 = analysis.percentile(arr, 50);
-  assert(p50 >= 2 && p50 <= 4, `Expected 2-4, got ${p50}`);
+console.log('synthetic');
+t('silence gaps between songs', () => {
+  const b = times(env([[60, ...M], [3, -90, 0], [60, ...M], [3, -90, 0], [60, ...M]]), { minTrack: 20 });
+  assert.strictEqual(b.length, 3); near(b[1], 63 - 0.4, 0.05); near(b[2], 126 - 0.4, 0.05);
+});
+t('a quiet transfer behaves like a loud master (threshold is relative)', () => {
+  assert.strictEqual(times(env([[60, -40, 0.015], [3, -110, 0], [60, -40, 0.015]]), { minTrack: 20 }).length, 2);
+});
+t('a short pause inside a song is ignored (minGap)', () => {
+  assert.strictEqual(times(env([[60, ...M], [0.6, -90, 0], [60, ...M]]), { minTrack: 20 }).length, 1);
+});
+t('the longer gap wins when two fall within minTrack', () => {
+  const b = times(env([[60, ...M], [1.5, -90, 0], [10, ...M], [4, -90, 0], [60, ...M]]), { minTrack: 30 });
+  assert.strictEqual(b.length, 2); near(b[1], 75.5 - 0.4, 0.1);
+});
+t('applause as loud as the band is found only in live mode', () => {
+  const e = env([[60, ...M], [8, -14.5, 0.42], [60, ...M]]);
+  assert.strictEqual(times(e, { minTrack: 20 }).length, 1);
+  const r = A.detectBreaks(e, { minTrack: 20, applause: true }); assert.strictEqual(r.times.length, 2); assert.strictEqual(r.gaps[0].kind, 'crowd');
+});
+t('loud tonal music never trips the applause gate', () => assert.strictEqual(times(env([[120, -6, 0.02]]), { minTrack: 20, applause: true }).length, 1));
+t('always includes 0 and honours maxTracks', () => {
+  const segs = []; for (let i = 0; i < 20; i++) segs.push([10, ...M], [2, -90, 0]);
+  const b = times(env(segs), { minTrack: 5, maxTracks: 6 }); assert.strictEqual(b.length, 6); assert.strictEqual(b[0], 0);
+});
+t('a single-bucket click inside silence does not split the gap', () => {
+  const e = env([[60, ...M], [1.0, -90, 0], [0.01, -20, 0], [1.0, -90, 0], [60, ...M]]);
+  assert.strictEqual(times(e, { minTrack: 20 }).length, 2);
 });
 
-test('percentile: 90th', () => {
-  const arr = Array.from({length: 100}, (_, i) => i);
-  const p90 = analysis.percentile(arr, 90);
-  assert(p90 >= 88 && p90 <= 100, `Expected 88-100, got ${p90}`);
+console.log('real audio (ffmpeg-decoded fixtures)');
+function envelopeOf(file) {
+  const sr = 22050, raw = execFileSync('ffmpeg', ['-v', 'error', '-i', path.join(FX, file), '-ac', '1', '-ar', String(sr), '-f', 'f32le', '-'], { maxBuffer: 1 << 30 });
+  const pcm = new Float32Array(raw.buffer, raw.byteOffset, raw.length >> 2), bl = Math.round(sr * B), n = Math.floor(pcm.length / bl);
+  const rms = new Float32Array(n), zcr = new Float32Array(n), peak = new Float32Array(n);
+  for (let b = 0; b < n; b++) { let sq = 0, z = 0; for (let i = b * bl; i < (b + 1) * bl; i++) { sq += pcm[i] * pcm[i]; if (i > b * bl && (pcm[i] >= 0) !== (pcm[i - 1] >= 0)) z++; } rms[b] = 20 * Math.log10(Math.sqrt(sq / bl) + 1e-7); zcr[b] = z / bl; }
+  return { bucket: bl / sr, n, duration: n * bl / sr, rms, peak, zcr };
+}
+t('studio.mp3: three breaks at the silences', () => {
+  const b = times(envelopeOf('studio.mp3'), { minTrack: 10 });
+  assert.strictEqual(b.length, 4); [0, 32.1, 70.6, 101.1].forEach((w, i) => near(b[i], w, 0.6, 'break ' + i));
 });
-
-test('percentile: empty array returns 0', () => {
-  const p = analysis.percentile([], 50);
-  assert.strictEqual(p, 0);
+t('vbr.mp3: same result', () => assert.strictEqual(times(envelopeOf('vbr.mp3'), { minTrack: 10 }).length, 4));
+t('live.mp3 (white-noise crowd): none in silence mode, two in live mode', () => {
+  const e = envelopeOf('live.mp3');
+  assert.strictEqual(times(e, { minTrack: 10 }).length, 1);
+  const b = times(e, { minTrack: 10, applause: true }); assert.strictEqual(b.length, 3); near(b[1], 46.6, 0.7); near(b[2], 98.6, 0.7);
 });
-
-// Detection with synthetic envelopes
-test('detectBreaks: finds single silence gap', () => {
-  const envelope = [];
-  // Build a synthetic envelope: music (high RMS), silence (low RMS), music
-  for (let i = 0; i < 100; i++) {
-    const rms = i >= 30 && i < 70 ? -50 : -20; // -50 dB silence from 3-7 sec
-    envelope.push({rms, zcr: 0.01, time: i * 0.01});
-  }
-  const breaks = analysis.detectBreaks(envelope, {
-    quietDropDb: -38,
-    minGap: 0.5,
-    applause: false,
-  });
-  assert(breaks.length > 1, `Expected breaks to find silence, got ${breaks.length}`);
-});
-
-test('detectBreaks: respects minGap threshold', () => {
-  const envelope = [];
-  // Short silence (0.3 sec) followed by longer silence (0.8 sec)
-  for (let i = 0; i < 150; i++) {
-    const rms = (i >= 20 && i < 50) || (i >= 80 && i < 150) ? -50 : -20;
-    envelope.push({rms, zcr: 0.01, time: i * 0.01});
-  }
-  const breaks = analysis.detectBreaks(envelope, {
-    quietDropDb: -38,
-    minGap: 0.5, // only >= 0.5 sec gaps
-    applause: false,
-  });
-  // Should find the longer gap (0.7 sec) but not the short one (0.3 sec)
-  assert(breaks.some(b => b > 0.8), 'Should find longer silence');
-});
-
-test('detectBreaks: applause detection (high ZCR)', () => {
-  const envelope = [];
-  // Music with normal ZCR, then applause (high ZCR, moderate RMS)
-  for (let i = 0; i < 100; i++) {
-    const zcr = i >= 50 ? 0.4 : 0.015; // applause ZCR
-    const rms = i >= 50 ? -25 : -20; // applause at similar level to music
-    envelope.push({rms, zcr, time: i * 0.01});
-  }
-  const breaks = analysis.detectBreaks(envelope, {
-    quietDropDb: -38,
-    minGap: 0.3,
-    applause: true,
-    zcrNoise: 0.22,
-  });
-  assert(breaks.length > 1, 'Applause detector should find break');
-});
-
-test('detectBreaks: applause disabled ignores ZCR', () => {
-  const envelope = [];
-  for (let i = 0; i < 100; i++) {
-    const zcr = i >= 50 ? 0.4 : 0.015;
-    const rms = -25; // all same level (no silence)
-    envelope.push({rms, zcr, time: i * 0.01});
-  }
-  const breaksWithApplause = analysis.detectBreaks(envelope, {quietDropDb: -38, minGap: 0.3, applause: true});
-  const breaksNoApplause = analysis.detectBreaks(envelope, {quietDropDb: -38, minGap: 0.3, applause: false});
-  assert(breaksWithApplause.length >= breaksNoApplause.length, 'Applause should find more breaks');
-});
-
-test('detectBreaks: respects maxTracks cap', () => {
-  const envelope = [];
-  // Many very short gaps
-  for (let i = 0; i < 200; i++) {
-    const rms = i % 10 === 5 ? -50 : -20; // gap every 10 buckets = many gaps
-    envelope.push({rms, zcr: 0.01, time: i * 0.01});
-  }
-  const breaks = analysis.detectBreaks(envelope, {
-    quietDropDb: -38,
-    minGap: 0.1,
-    maxTracks: 10,
-  });
-  assert(breaks.length <= 10, `Expected <= 10 breaks, got ${breaks.length}`);
-});
-
-test('detectBreaks: always includes time 0', () => {
-  const envelope = [{rms: -20, zcr: 0.01, time: 0}];
-  const breaks = analysis.detectBreaks(envelope);
-  assert(breaks.length > 0);
-  assert.strictEqual(breaks[0], 0);
-});
-
-console.log(`\n${passCount} passed, ${failCount} failed\n`);
-process.exit(failCount > 0 ? 1 : 0);
+console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);

@@ -1,132 +1,72 @@
 # MP3 Chapter Splitter
 
-A browser-based tool for splitting MP3 files into chapters, with automatic silence/break detection or manual timestamp parsing.
+Split one long MP3 (a concert, a DJ set, an audiobook, a whole album in one file) into separate, tagged tracks, **entirely in your browser**. Nothing is uploaded.
 
-**Live Demo:** Open `index.html` in your browser and then click through to `mp3-chapter-splitter.html`.
+Find the track boundaries by **listening to the audio** (quiet gaps, or applause on live recordings) or by **pasting YouTube-style timestamps**, tidy them up on an interactive waveform, name the tracks, and download a ZIP. The audio is cut **losslessly**: frames are copied, never re-encoded.
 
-## Features
+![The app with a 21-minute recording split into six tracks](docs/images/03-overview-light.png)
 
-- **Automatic detection** — analyzes audio to find chapter breaks by detecting silence, applause, and dynamic shifts
-- **Manual timestamps** — paste YouTube links with timestamps or enter breaks manually
-- **Lossless splitting** — cuts on MP3 frame boundaries; no re-encoding or quality loss
-- **Frame-accurate** — breaks land within ~26 ms of the target time
-- **Metadata** — set artist, album, year, genre, and chapter titles
-- **Playback preview** — scrub through the audio and hear chapters in real time
-- **Export to ZIP** — download all chapters as separate MP3 files
-- **Dark mode** — theme persists in browser storage
-- **No upload** — all processing happens in your browser; nothing is sent to a server
+## Use it
 
-## Architecture
+- **Hosted:** enable GitHub Pages for this repo (Settings -> Pages -> deploy from `main`, root). `index.html` is the landing page and links to the app.
+- **Locally:** open `mp3-chapter-splitter.html` in a browser. It is one self-contained file: save it anywhere, no server, no install, works offline.
 
-### Core Components
+Then: choose an MP3 -> check the suggested breaks -> name the tracks -> **Split and download .zip**.
+The full walkthrough, with screenshots, is in the **[manual](MANUAL.md)**.
 
-- **`core.js`** — MP3 parsing (frame headers, ID3v2 tags, Xing/VBR headers), frame-boundary cutting, CRC-32, and ZIP assembly
-- **`analysis.js`** — Audio envelope analysis (RMS, peak, zero-crossing rate in 10 ms buckets), relative thresholding, and break detection
-- **`app.html`** — Web UI (waveform canvas, timeline, controls, settings)
+## What it does
 
-All compiled into a single `mp3-chapter-splitter.html` file for easy distribution.
+| | |
+|---|---|
+| **Detect from the audio** | Builds a loudness profile of the whole file and suggests breaks at the quiet gaps. The threshold is relative to the music level, so quiet transfers and loud masters behave alike. Live recording mode treats applause as a gap too. |
+| **Paste timestamps** | Understands YouTube descriptions like `[00:00](https://...) Title`, plain `0:00 Title` lists, `Title 0:00` layouts, with a time shift for differing lead-in. |
+| **Waveform editor** | Numbered flags you tap to play and drag to move; click anywhere to listen; double-click to add a break; zoom with an overview strip; start / previous break / next break / end buttons beside Play; keyboard shortcuts. |
+| **Lossless cuts** | Cuts land on MPEG frame boundaries (within ~26 ms of the marker); audio bytes are copied unchanged. |
+| **Tags & filenames** | ID3v2.3 title, album, artist, album artist, year, style, track n/N and length; a fresh Xing/Info header; numbered filenames; optional album subfolder. Style picker with common styles; your own are remembered. |
+| **Output** | A ZIP, or straight into a folder in browsers that support it (Chrome, Edge). |
+| **Long files** | Audio is analysed in ~20 s chunks so memory stays flat; a 21-minute test file is analysed in about 3 seconds here. A progress bar shows the reading. |
+| **Light & dark** | One toggle button; remembered. |
 
-### MP3 Parsing
+| Progress while reading | Zoomed to one track | Live recording (applause shaded) |
+|---|---|---|
+| ![](docs/images/02-progress.png) | ![](docs/images/04-zoomed-track.png) | ![](docs/images/09-live-recording.png) |
 
-The parser reads MPEG-1/2/2.5 Layer III frame headers and builds a frame index. Cuts are aligned to frame boundaries—no mid-frame cuts. This means output audio is bit-for-bit identical to the input (after re-encoding ID3 tags).
+![Dark theme](docs/images/10-overview-dark.png)
 
-#### ID3v2.3 Tagging
+## Privacy
 
-Text frames (TIT2, TPE1, TALB, TYER, TCON, TRCK) are written in UTF-16 with BOM. A fresh Xing/Info VBR header is synthesized for each output, with a 100-entry table of contents (TOC) and accurate frame count.
+Your audio never leaves your computer; the page makes no network requests. The only things stored, in your browser's `localStorage`, are the theme choice and any custom styles you type.
 
-### Audio Analysis
+## Limits worth knowing
 
-1. **Envelope building** — The file is decoded in ~20-second chunks; each chunk is reduced to 10 ms buckets of RMS (dBFS), peak, and zero-crossing rate (ZCR).
-2. **Relative thresholding** — The 90th percentile of RMS sets a "music level" baseline. Anything more than ~40 dB below it counts as silence. This works the same for quiet transfers and loud masters.
-3. **Break placement** — A silence longer than the minimum gap becomes a candidate. The break is placed just before the sound returns, so the next chapter gets a short lead-in.
-4. **Applause detection** — Live recordings don't go silent between songs. Applause is identified by texture: it crosses zero far more often than music (ZCR 0.39–0.47 vs. music 0.012–0.020). A simple threshold (ZCR > 0.22) catches it.
+- The whole file is read into memory, so very large files need that much free RAM.
+- Cuts are frame-accurate, not sample-accurate (~26 ms). As with any lossless cut (`ffmpeg -c copy` included), the first fraction of a second of a track can carry a faint artifact where the encoder's bit reservoir was left behind.
+- Only MP3 input and output. Folder saving needs a browser with the File System Access API; elsewhere use the ZIP.
+- Developed and tested in Chromium; the code uses standard APIs, but Safari and Firefox have not been tested.
 
-## Testing
+## Develop
 
-Run the test suite:
-
-```bash
-npm test
-```
-
-Tests cover:
-- MP3 frame parsing (sync, bitrate, sample rate, padding, frame size)
-- ID3 and Xing header generation
-- Frame-boundary cutting and ZIP assembly
-- Audio analysis (synthetic envelopes, silence, applause, mid-song pauses)
-- Browser UI (theme toggle, timestamp parsing, auto-detection, marker drag/add)
-- End-to-end workflow (file load → detect → edit → split → verify)
-
-## Building from Source
+| File | Role |
+|---|---|
+| `core.js` | MP3 parsing, cutting, ID3, Xing header, timestamp parsing, ZIP. Dependency-free; works in browsers and Node. |
+| `analysis.js` | Loudness envelope (Web Audio) and break detection. |
+| `app.html` | Page and UI script, with markers where the two modules are inlined. |
+| `build.js` | Produces **`mp3-chapter-splitter.html`** (generated: edit the sources, then run `node build.js`). |
+| `index.html` | Landing page. |
+| `test.js`, `analysis-test.js`, `wave-e2e.js` | Tests; `gen_fixtures.py` makes the test audio; `capture_screenshots.js` regenerates `docs/images`. |
 
 ```bash
-node build.js
+npm install && npx playwright install chromium
+sudo apt install ffmpeg unzip          # the tests use ffmpeg/ffprobe to check the output files independently
+python3 gen_fixtures.py                # test audio -> fixtures/ (not committed)
+node build.js                          # rebuild the single file
+npm test                               # engine (27 checks) + detection (11 checks)
+npm run test:browser                   # 46 checks in headless Chromium, incl. a 21-minute file
+npm run screenshots                    # regenerate the manual's images
 ```
 
-This inlines `core.js` and `analysis.js` into `app.html` and produces `mp3-chapter-splitter.html`.
+The engine tests cut real files and verify them with `ffprobe` (duration, tags), `ffmpeg` (clean decode) and a pitch check that each output really contains the right song. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## Licensing
+## Licence
 
-### Application
-
-MIT License © 2024 Doug Alder
-
-See LICENSE file.
-
-### Technology
-
-The app uses:
-- **Web Audio API** — standard browser API (W3C spec)
-- **File System Access API** — standard browser API
-- **Canvas 2D** — standard browser API
-- **No third-party libraries** — all code is original
-
-The app reads and writes MP3 data (MPEG-1/2/2.5 Layer III), a patented format. The MPEG patents expired in 2017 (Fraunhofer/Technicolor terminated licensing). The ID3 tag format is open (unsupported but not encumbered). ZIP and CRC-32 are public domain.
-
-## Development
-
-### File Structure
-
-```
-.
-├── index.html                    # Landing page
-├── mp3-chapter-splitter.html     # Built application (single file)
-├── app.html                      # UI source template
-├── core.js                       # MP3 parsing & cutting
-├── analysis.js                   # Audio analysis
-├── build.js                      # Build script
-├── test.js                       # Unit tests (node)
-├── e2e.js                        # End-to-end workflow
-├── analysis-test.js              # Audio detection tests
-├── theme-test.js                 # Theme persistence
-├── wave-e2e.js                   # Browser UI tests (Playwright)
-├── gen_fixtures.py               # Test MP3 fixture generator
-├── fixtures/                     # Test MP3 files
-├── README.md                     # This file
-├── MANUAL.md                     # User guide
-├── CHANGELOG.md                  # Release history
-├── CONTRIBUTING.md               # Development guide
-└── LICENSE                       # MIT license
-```
-
-### Running Browser Tests
-
-Tests run in headless Chromium via Playwright:
-
-```bash
-npm install
-npx playwright install
-npm run test:browser
-```
-
-## Contributing
-
-See CONTRIBUTING.md for guidelines on reporting issues, proposing features, and submitting pull requests.
-
-## Changelog
-
-See CHANGELOG.md for version history.
-
----
-
-Questions? Open an issue on GitHub: https://github.com/dougalder/mp3-chapter-splitter
+[MIT](LICENSE) (c) 2026 Doug Alder. The app contains no third-party code; formats and standards it touches, and their licensing status, are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Changes: [CHANGELOG.md](CHANGELOG.md).

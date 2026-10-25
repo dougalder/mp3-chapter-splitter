@@ -1,88 +1,29 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [SemVer](https://semver.org/).
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [1.0.0] - 2026-10-25
 
-## [1.0.0] – 2024-10-25
+First public release.
 
-### Added
+### Splitting
+- Lossless, frame-accurate cuts: audio frames are copied bit-for-bit, each cut lands within one MPEG frame (about 26 ms) of its marker.
+- MPEG-1/2/2.5 Layer III, mono and stereo, CBR and VBR. Leading ID3v2 and trailing ID3v1 tags are skipped; an existing Xing/Info frame is recognised.
+- Each track gets ID3v2.3 tags (title, album, artist, album artist, year, style, track n/N, length) and a fresh Xing/Info header so lengths and seeking are right.
+- Output as a ZIP (UTF-8 filenames) or, in browsers that support it, straight into a chosen folder. Optional album subfolder; numbered filenames; ID3 and VBR-header writing can be switched off.
 
-- **Core Features**
-  - Frame-accurate lossless MP3 splitting (no re-encoding)
-  - Automatic chapter break detection using audio analysis
-  - Manual timestamp parsing (YouTube format and generic timestamps)
-  - Real-time waveform visualization with interactive timeline
-  - Chapter title editing and metadata tagging (artist, album, year, genre)
-  - Audio preview with playback controls and timeline scrubbing
-  - Export to ZIP archive containing separate MP3 files per chapter
+### Finding the tracks
+- Detect from the audio: a loudness envelope is built in about 20-second chunks (flat memory, long recordings are fine) and quiet gaps are found relative to the music level, so quiet transfers and loud masters behave alike.
+- Live recordings: applause is recognised by its texture (zero-crossing rate), not its level.
+- Paste timestamps: YouTube descriptions (`[00:00](url) Title`), plain lists, "Title 0:00" layouts, with a time-shift for differing lead-in.
+- Sliders for silence threshold, shortest gap and shortest track; detected gaps can be shaded on the waveform.
 
-- **Audio Analysis**
-  - Relative thresholding for silence detection (works on quiet and loud masters)
-  - Zero-crossing rate (ZCR) based applause detection for live recordings
-  - Configurable detection sensitivity (quiet threshold, minimum gap)
-  - 10 ms envelope buckets for efficient memory usage
-  - Support for streams up to 47+ minutes with minimal memory footprint
+### Working on the tracks
+- Waveform with numbered, tappable play flags; click anywhere to listen; drag markers; double-click to add; zoom with an overview strip.
+- Transport buttons next to Play: start, previous break, next break, end. Keyboard shortcuts for all of it.
+- Progress bar while the audio is read. Fields are cleared when a new file is loaded.
+- Editable start times and titles in the track table. Style picker with common styles; your own styles are remembered.
+- Light/dark theme with a single toggle button; the choice is remembered.
 
-- **MP3 Support**
-  - MPEG-1/2/2.5 Layer III frame parsing and validation
-  - ID3v2.3 tag writing (UTF-16, text frames: TIT2, TPE1, TALB, TYER, TCON, TRCK)
-  - Xing/Info VBR header synthesis with 100-entry table of contents
-  - CRC-32 checksums for ZIP integrity
-  - Support for mono and stereo, all standard bitrates and sample rates
-
-- **User Interface**
-  - Dark mode with persistent theme preference
-  - Tabbed interface for detection, timestamps, and metadata
-  - Responsive canvas-based waveform with devicePixelRatio support
-  - Numbered chapter flags on timeline (click to preview, drag to adjust)
-  - Transport buttons (start, end, previous/next break)
-  - Progress indicator for file analysis
-
-- **Testing**
-  - 55 unit tests (MP3 parsing, frame cutting, ZIP assembly, filename sanitizing)
-  - 27 audio analysis tests (synthetic envelopes, silence, applause, edge cases)
-  - End-to-end browser tests (Playwright, 90+ assertions)
-  - Theme persistence and WCAG contrast ratio validation
-  - Cross-bitrate and cross-channel test fixtures (CBR, VBR, mono)
-
-- **Documentation**
-  - User manual (MANUAL.md) with screenshots and troubleshooting
-  - Developer README with architecture and testing instructions
-  - Inline code comments and docstrings
-  - Third-party notice and licensing information
-
-### Technical Details
-
-- Zero external dependencies (all code is original)
-- Single-file distribution (mp3-chapter-splitter.html)
-- Works in all modern browsers with Web Audio API, Canvas, and File System Access API
-- MIT Licensed © 2024 Doug Alder
-
----
-
-## Release Notes
-
-**1.0.0** is the inaugural release, featuring a stable, well-tested implementation of MP3 chapter splitting with both automatic detection and manual timestamp parsing.
-
-### Known Limitations
-
-- Chapter count is capped at 80 to prevent accidental over-splitting
-- Chapter titles are limited to 200 characters
-- File size is subject to browser memory limits
-- Frame-aligned cuts can land within ~26 ms of the exact timestamp (MPEG frame duration)
-
-### Browser Support
-
-- Chrome/Chromium 90+
-- Firefox 88+
-- Safari 15+
-- Edge 90+
-
-(Must support Web Audio API, Canvas 2D, File System Access API)
-
----
-
-For issues, feature requests, or contributions, visit:
-https://github.com/dougalder/mp3-chapter-splitter
+### Quality
+- Test suites: engine (27 checks, verified against `ffprobe`/`ffmpeg`), detection (11), and a real-browser end-to-end run (46 checks) including a 21-minute file.
